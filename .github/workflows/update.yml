@@ -20,6 +20,8 @@ jobs:
     env:
       LIST_KEY: internships
       FEED_URL: https://devsunite.com/api/public/job-lists
+      # Encrypted repo secret; the feed answers 401 without it.
+      FEED_TOKEN: ${{ secrets.JOB_LISTS_FEED_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -27,7 +29,9 @@ jobs:
         id: fetch
         run: |
           set -uo pipefail
-          code=$(curl -sS --retry 3 --retry-delay 20 --max-time 120 -o README.new.md -w "%{http_code}" "$FEED_URL/$LIST_KEY?format=md" || echo "000")
+          if [ -z "${FEED_TOKEN:-}" ]; then echo "::error::Repo secret JOB_LISTS_FEED_TOKEN is missing"; exit 1; fi
+          code=$(curl -sS --retry 3 --retry-delay 20 --max-time 120 -H "Authorization: Bearer $FEED_TOKEN" -o README.new.md -w "%{http_code}" "$FEED_URL/$LIST_KEY?format=md" || echo "000")
+          if [ "$code" = "401" ]; then echo "::error::Feed rejected the token (HTTP 401), check JOB_LISTS_FEED_TOKEN"; exit 1; fi
           if [ "$code" = "404" ]; then
             # The feed is not live on devsunite.com yet: keep the current README, do not fail.
             echo "::warning::DevsUnite feed not live yet (HTTP 404), keeping the current README"
