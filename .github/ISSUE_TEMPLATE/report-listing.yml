@@ -1,0 +1,29 @@
+name: Report a listing
+description: A role in this list is closed, broken or wrong
+title: "Listing: "
+labels: ["listing"]
+body:
+  - type: input
+    id: link
+    attributes:
+      label: Job link
+      description: The devsunite.com link from the list
+      placeholder: https://devsunite.com/jobs/...
+    validations:
+      required: true
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What is wrong?
+      options:
+        - The role is closed
+        - The link does not open
+        - Wrong location or experience level
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Anything that helps us fix it

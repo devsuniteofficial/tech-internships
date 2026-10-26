@@ -1,0 +1,54 @@
+# Generated from DevsuniteMain scripts/github-job-lists/template. Edit there, not here.
+name: Update job list
+
+on:
+  schedule:
+    - cron: "30 3 * * *" # 03:30 UTC = 09:00 IST, daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-job-list
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LIST_KEY: internships
+      FEED_URL: https://devsunite.com/api/public/job-lists
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the list from DevsUnite
+        id: fetch
+        run: |
+          set -uo pipefail
+          code=$(curl -sS --retry 3 --retry-delay 20 --max-time 120 -o README.new.md -w "%{http_code}" "$FEED_URL/$LIST_KEY?format=md" || echo "000")
+          if [ "$code" = "404" ]; then
+            # The feed is not live on devsunite.com yet: keep the current README, do not fail.
+            echo "::warning::DevsUnite feed not live yet (HTTP 404), keeping the current README"
+            rm -f README.new.md
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$code" != "200" ]; then echo "::error::Feed returned HTTP $code, not committing"; exit 1; fi
+          size=$(wc -c < README.new.md)
+          # Never replace a real list with an empty or broken one.
+          if [ "$size" -lt 1000 ]; then echo "::error::Feed returned only $size bytes, not committing"; exit 1; fi
+          grep -q "View job" README.new.md || { echo "::error::Feed content is not a job list README, not committing"; exit 1; }
+          mv README.new.md README.md
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Commit if changed
+        if: steps.fetch.outputs.skip != 'true'
+        run: |
+          if git diff --quiet -- README.md; then echo "No changes"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Update job list $(date -u +%Y-%m-%d)"
+          git push
